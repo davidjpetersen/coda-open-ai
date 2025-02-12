@@ -13,5 +13,6 @@ export type OpenAIFetchFunction = (
     context: coda.ExecutionContext, 
     endpoint: string, 
     method?: OpenAIMethod, 
-    body?: any
+    body?: any,
+    isAssistantApi?: boolean
 ) => Promise<any>;

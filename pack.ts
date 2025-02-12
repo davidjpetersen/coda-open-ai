@@ -1,5 +1,5 @@
 import * as coda from "@codahq/packs-sdk";
-import { ModelSchema, ImageSchema, AudioTranscriptionSchema, EmbeddingSchema, FileSchema, ModerationSchema, TextToSpeechSchema, VisionAnalysisSchema, FineTuneSchema } from "./schemas";
+import { ModelSchema, ImageSchema, AudioTranscriptionSchema, EmbeddingSchema, FileSchema, ModerationSchema, TextToSpeechSchema, VisionAnalysisSchema, FineTuneSchema, AssistantSchema, ThreadSchema, MessageSchema, RunSchema } from "./schemas";
 import { fetchFromOpenAI, OPENAI_API_BASE_URL } from "./helpers";
 
 export const pack = coda.newPack();
@@ -358,6 +358,27 @@ pack.addFormula({
   },
 });
 
+// Utility function to convert Unix timestamp to Coda date format
+function unixTimestampToCodaDate(timestamp: number): Date {
+  if (!timestamp) {
+    return new Date(Date.now());
+  }
+  
+  // Ensure timestamp is a number
+  const numericTimestamp = Number(timestamp);
+  if (isNaN(numericTimestamp)) {
+    throw new Error('Invalid timestamp provided');
+  }
+
+  // Check if timestamp is in milliseconds or seconds
+  // Most Unix timestamps are in seconds, but some APIs might provide milliseconds
+  const timestampMs = numericTimestamp < 1e12 
+    ? numericTimestamp * 1000  // Convert seconds to milliseconds
+    : numericTimestamp;        // Already in milliseconds
+    
+  return new Date(timestampMs);
+}
+
 // Fine-tunes Management
 pack.addSyncTable({
   name: "FineTunes",
@@ -373,8 +394,8 @@ pack.addSyncTable({
       return {
         result: data.data.map(job => ({
           ...job,
-          createdAt: job.created_at,
-          updatedAt: job.updated_at,
+          createdAt: unixTimestampToCodaDate(job.created_at),
+          updatedAt: unixTimestampToCodaDate(job.updated_at),
           fineTunedModel: job.fine_tuned_model,
         })),
       };
@@ -410,8 +431,8 @@ pack.addFormula({
     });
     return {
       ...data,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: unixTimestampToCodaDate(data.created_at),
+      updatedAt: unixTimestampToCodaDate(data.updated_at),
       fineTunedModel: data.fine_tuned_model,
     };
   },
@@ -434,8 +455,8 @@ pack.addFormula({
     const data = await fetchFromOpenAI(context, `/fine_tuning/jobs/${fineTuneId}`);
     return {
       ...data,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: unixTimestampToCodaDate(data.created_at),
+      updatedAt: unixTimestampToCodaDate(data.updated_at),
       fineTunedModel: data.fine_tuned_model,
     };
   },
@@ -459,8 +480,8 @@ pack.addFormula({
     const data = await fetchFromOpenAI(context, `/fine_tuning/jobs/${fineTuneId}/cancel`, "POST");
     return {
       ...data,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: unixTimestampToCodaDate(data.created_at),
+      updatedAt: unixTimestampToCodaDate(data.updated_at),
       fineTunedModel: data.fine_tuned_model,
     };
   },
@@ -482,7 +503,7 @@ pack.addFormula({
     type: coda.ValueType.Object,
     properties: {
       object: { type: coda.ValueType.String },
-      createdAt: { type: coda.ValueType.Number },
+      createdAt: { type: coda.ValueType.String },
       level: { type: coda.ValueType.String },
       message: { type: coda.ValueType.String },
     },
@@ -491,7 +512,7 @@ pack.addFormula({
     const data = await fetchFromOpenAI(context, `/fine_tuning/jobs/${fineTuneId}/events`);
     return data.data.map(event => ({
       object: event.object,
-      createdAt: event.created_at,
+      createdAt: unixTimestampToCodaDate(event.created_at),
       level: event.level,
       message: event.message,
     }));
@@ -565,8 +586,8 @@ pack.addFormula({
     const data = await fetchFromOpenAI(context, "/fine_tuning/jobs", "POST", requestBody);
     return {
       ...data,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: unixTimestampToCodaDate(data.created_at),
+      updatedAt: unixTimestampToCodaDate(data.updated_at),
       fineTunedModel: data.fine_tuned_model,
     };
   },
@@ -652,5 +673,179 @@ pack.addFormula({
       },
     });
     return response.body.data;
+  },
+});
+
+// Assistants Management
+pack.addSyncTable({
+  name: "Assistants",
+  description: "List and manage OpenAI assistants.",
+  identityName: "assistant",
+  schema: AssistantSchema,
+  formula: {
+    name: "ListAssistants",
+    description: "List all assistants.",
+    parameters: [],
+    execute: async function ([], context) {
+      const data = await fetchFromOpenAI(context, "/assistants", "GET", undefined, true);
+      return { result: data.data };
+    },
+  },
+});
+
+pack.addFormula({
+  name: "CreateAssistant",
+  description: "Create a new assistant.",
+  isAction: true,
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "model",
+      description: "The model to use (e.g., gpt-4-turbo).",
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "name",
+      description: "The name of the assistant.",
+      optional: true,
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "instructions",
+      description: "Instructions for the assistant's behavior.",
+      optional: true,
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.StringArray,
+      name: "tools",
+      description: "Tools the assistant can use (code_interpreter, retrieval, function).",
+      optional: true,
+    }),
+  ],
+  resultType: coda.ValueType.Object,
+  schema: AssistantSchema,
+  execute: async function ([model, name, instructions, tools], context) {
+    const body = {
+      model,
+      name,
+      instructions,
+      tools: tools?.map(tool => ({ type: tool })),
+    };
+    return await fetchFromOpenAI(context, "/assistants", "POST", body, true);
+  },
+});
+
+// Threads Management
+pack.addFormula({
+  name: "CreateThread",
+  description: "Create a new conversation thread.",
+  isAction: true,
+  parameters: [],
+  resultType: coda.ValueType.Object,
+  schema: ThreadSchema,
+  execute: async function ([], context) {
+    return await fetchFromOpenAI(context, "/threads", "POST", {}, true);
+  },
+});
+
+// Messages Management
+pack.addFormula({
+  name: "CreateMessage",
+  description: "Create a new message in a thread.",
+  isAction: true,
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "threadId",
+      description: "The ID of the thread to add the message to.",
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "content",
+      description: "The content of the message.",
+    }),
+  ],
+  resultType: coda.ValueType.Object,
+  schema: MessageSchema,
+  execute: async function ([threadId, content], context) {
+    const body = {
+      role: "user",
+      content,
+    };
+    return await fetchFromOpenAI(context, `/threads/${threadId}/messages`, "POST", body, true);
+  },
+});
+
+pack.addFormula({
+  name: "ListMessages",
+  description: "List all messages in a thread.",
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "threadId",
+      description: "The ID of the thread to list messages from.",
+    }),
+  ],
+  resultType: coda.ValueType.Array,
+  items: MessageSchema,
+  execute: async function ([threadId], context) {
+    const data = await fetchFromOpenAI(context, `/threads/${threadId}/messages`, "GET", undefined, true);
+    return data.data;
+  },
+});
+
+// Runs Management
+pack.addFormula({
+  name: "CreateRun",
+  description: "Start a new assistant run on a thread.",
+  isAction: true,
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "threadId",
+      description: "The ID of the thread.",
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "assistantId",
+      description: "The ID of the assistant to use.",
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "instructions",
+      description: "Override the assistant's instructions for this run.",
+      optional: true,
+    }),
+  ],
+  resultType: coda.ValueType.Object,
+  schema: RunSchema,
+  execute: async function ([threadId, assistantId, instructions], context) {
+    const body = {
+      assistant_id: assistantId,
+      instructions,
+    };
+    return await fetchFromOpenAI(context, `/threads/${threadId}/runs`, "POST", body, true);
+  },
+});
+
+pack.addFormula({
+  name: "GetRun",
+  description: "Get the status of a run.",
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "threadId",
+      description: "The ID of the thread.",
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "runId",
+      description: "The ID of the run to check.",
+    }),
+  ],
+  resultType: coda.ValueType.Object,
+  schema: RunSchema,
+  execute: async function ([threadId, runId], context) {
+    return await fetchFromOpenAI(context, `/threads/${threadId}/runs/${runId}`, "GET", undefined, true);
   },
 });
