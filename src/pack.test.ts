@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import sinon from "sinon";
-import { pack } from "./pack";
+import { pack } from "../pack";
 
 // Language: typescript
 

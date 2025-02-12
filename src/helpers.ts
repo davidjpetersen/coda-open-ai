@@ -30,3 +30,24 @@ export const fetchFromOpenAI: OpenAIFetchFunction = async (context, endpoint, me
         throw new Error("Failed to fetch data from OpenAI.");
     }
 }
+
+// Utility function to convert Unix timestamp to Coda date format
+export function unixTimestampToCodaDate(timestamp: number): Date {
+  if (!timestamp) {
+    return new Date(Date.now());
+  }
+  
+  // Ensure timestamp is a number
+  const numericTimestamp = Number(timestamp);
+  if (isNaN(numericTimestamp)) {
+    throw new Error('Invalid timestamp provided');
+  }
+
+  // Check if timestamp is in milliseconds or seconds
+  // Most Unix timestamps are in seconds, but some APIs might provide milliseconds
+  const timestampMs = numericTimestamp < 1e12 
+    ? numericTimestamp * 1000  // Convert seconds to milliseconds
+    : numericTimestamp;        // Already in milliseconds
+    
+  return new Date(timestampMs);
+}
