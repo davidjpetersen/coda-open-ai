@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@codahq/packs-sdk": "^1.8.6",
+    "@codahq/packs-sdk": "^1.9.1",
     "form-data": "^4.0.1"
   },
   "devDependencies": {
