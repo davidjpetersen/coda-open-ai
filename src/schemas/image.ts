@@ -6,7 +6,7 @@ export const ImageSchema = coda.makeObjectSchema({
     revised_prompt: { type: coda.ValueType.String, required: true },
     b64_json: { type: coda.ValueType.String },
     model: { type: coda.ValueType.String, required: true },
-    created: { type: coda.ValueType.Number, required: true }
+    created: { type: coda.ValueType.Number, required: true, codaType: coda.ValueHintType.DateTime },
   },
   displayProperty: "url",
 });

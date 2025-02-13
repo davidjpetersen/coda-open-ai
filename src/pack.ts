@@ -13,15 +13,13 @@ import {
   getThreadsFormulas
 } from "./formulas";
 
-// Helper imports
-import { fetchFromOpenAI, OPENAI_API_BASE_URL } from "./helpers";
 
 export const pack = coda.newPack();
 
 pack.addNetworkDomain("openai.com");
 
 // Set up system-wide authentication
-pack.setSystemAuthentication({
+pack.setUserAuthentication({
     type: coda.AuthenticationType.HeaderBearerToken,
 });
 

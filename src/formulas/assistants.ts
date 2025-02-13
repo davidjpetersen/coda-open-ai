@@ -7,17 +7,35 @@ export function getAssistantFormulas(pack: coda.PackDefinitionBuilder) {
   pack.addSyncTable({
     name: "Assistants",
     description: "List and manage OpenAI assistants.",
-    identityName: "assistant",
+    identityName: "Assistant",
     schema: AssistantSchema,
     formula: {
-      name: "ListAssistants",
-      description: "List all assistants.",
+      name: "AssistantsSync",
+      description: "Sync assistants with OpenAI.",
       parameters: [],
-      execute: async function ([], context) {
+      execute: async function ([], context: coda.ExecutionContext) {
         const data = await fetchFromOpenAI(context, "/assistants", "GET", undefined, true);
         return { result: data.data };
       },
-    },
+      executeUpdate: async function (args, updates, context) {
+        let jobs = updates.map(async update => {
+          let { newValue } = update;
+          let assistantId = newValue.id;
+          const body = {
+            name: newValue.name,
+            description: newValue.description,
+            model: newValue.model,
+            instructions: newValue.instructions,
+            tools: newValue.tools,
+            metadata: newValue.metadata ? JSON.stringify(newValue.metadata) : {},
+          };
+          const data = await fetchFromOpenAI(context, `/assistants/${assistantId}`, "POST", body, true);
+          return data;
+        });
+        let results = await Promise.all(jobs);
+        return { result: results };
+      },
+    }
   });
 
   pack.addFormula({
@@ -51,7 +69,7 @@ export function getAssistantFormulas(pack: coda.PackDefinitionBuilder) {
     ],
     resultType: coda.ValueType.Object,
     schema: AssistantSchema,
-    execute: async function ([model, name, instructions, tools], context) {
+    execute: async function ([model, name, instructions, tools]: [string, string, string, string[]], context: coda.ExecutionContext) {
       const body = {
         model,
         name,
@@ -59,6 +77,25 @@ export function getAssistantFormulas(pack: coda.PackDefinitionBuilder) {
         tools: tools?.map(tool => ({ type: tool })),
       };
       return await fetchFromOpenAI(context, "/assistants", "POST", body, true);
+    },
+  });
+
+  pack.addFormula({
+    name: "DeleteAssistant",
+    description: "Delete an assistant.",
+    isAction: true,
+    schema: AssistantSchema,
+    parameters: [
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "assistantId",
+        description: "The ID of the assistant to delete.",
+      }),
+    ],
+    resultType: coda.ValueType.Object,
+    execute: async function ([assistantId]: [string], context: coda.ExecutionContext) {
+      const data = await fetchFromOpenAI(context, `/assistants/${assistantId}`, "DELETE", undefined, true);
+      return data;
     },
   });
 }

@@ -67,8 +67,8 @@ export const FineTuneSchema = coda.makeObjectSchema({
   properties: {
     id: { type: coda.ValueType.String, required: true },
     model: { type: coda.ValueType.String, required: true },
-    created_at: { type: coda.ValueType.Number, required: true },
-    finished_at: { type: coda.ValueType.Number },
+    created_at: { type: coda.ValueType.Number, required: true, codaType: coda.ValueHintType.DateTime },
+    finished_at: { type: coda.ValueType.Number, codaType: coda.ValueHintType.DateTime },
     fine_tuned_model: { type: coda.ValueType.String },
     organization_id: { type: coda.ValueType.String, required: true },
     result_files: { 
